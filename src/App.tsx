@@ -15,6 +15,7 @@ import {
     getDemoResponse,
     getDemoFeedback,
     speakText,
+    unlockAudio,
     MODELS,
 } from './services/geminiService';
 import type { Message, SpeechRecognitionResult } from './types';
@@ -41,6 +42,7 @@ function App() {
     } = useAppState();
 
     const [interimTranscript, setInterimTranscript] = useState('');
+    const [hasAccumulatedText, setHasAccumulatedText] = useState(false);
     const pendingTranscriptRef = useRef('');
     const debounceTimeoutRef = useRef<number | null>(null);
     const accumulatedTranscriptRef = useRef('');
@@ -120,32 +122,36 @@ function App() {
         }
     }, [isDemoMode, addMessage, state.messages, handleAIResponse, setProcessing]);
 
-    // Speech recognition callback
+    // Speech recognition callback - just accumulate, don't auto-send
     const handleSpeechResult = useCallback((result: SpeechRecognitionResult) => {
-        // Always clear existing timeout on new input
-        if (debounceTimeoutRef.current) {
-            window.clearTimeout(debounceTimeoutRef.current);
-            debounceTimeoutRef.current = null;
-        }
-
         if (result.isFinal) {
             // Clear interim
             setInterimTranscript('');
             pendingTranscriptRef.current = '';
 
             if (result.transcript.trim()) {
-                // Append to accumulation
+                // Append to accumulation (no auto-send, wait for turn taking button)
                 const text = result.transcript.trim();
                 accumulatedTranscriptRef.current += (accumulatedTranscriptRef.current ? ' ' : '') + text;
-
-                // Set timeout to send (Debounce 7s - wait for user to finish speaking)
-                debounceTimeoutRef.current = window.setTimeout(sendAccumulatedMessage, 7000);
+                setHasAccumulatedText(true);
             }
         } else {
             // Update interim transcript
             setInterimTranscript(result.transcript);
             pendingTranscriptRef.current = result.transcript;
         }
+    }, []);
+
+    // Handle turn taking button press - user is done speaking
+    const handleTurnTaking = useCallback(() => {
+        // Clear any pending debounce timeout
+        if (debounceTimeoutRef.current) {
+            window.clearTimeout(debounceTimeoutRef.current);
+            debounceTimeoutRef.current = null;
+        }
+        // Send accumulated message
+        sendAccumulatedMessage();
+        setHasAccumulatedText(false);
     }, [sendAccumulatedMessage]);
 
     const handleSpeechError = useCallback((error: string) => {
@@ -187,10 +193,22 @@ function App() {
     }, [stopListening, startListening]);
 
 
-
     // Start conversation
     const handleStart = useCallback(async () => {
         if (!state.apiKey) return;
+
+        // Unlock audio for iOS (must be called on user interaction)
+        unlockAudio();
+
+        // Request microphone permission explicitly for mobile
+        try {
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+            console.log('Microphone permission granted');
+        } catch (err) {
+            console.error('Microphone permission denied:', err);
+            setError('マイクへのアクセスが拒否されました。ブラウザの設定でマイクを許可してください。');
+            return;
+        }
 
         setProcessing(true);
         initializeGemini(state.apiKey);
@@ -236,10 +254,23 @@ function App() {
             }
         }
         setProcessing(false);
-    }, [state.apiKey, startConversation, startRecording, startListening, addMessage, setProcessing, setError]);
+    }, [state.apiKey, selectedModel, startConversation, startRecording, startListening, stopListening, addMessage, setProcessing, setError]);
 
     // Start demo mode (no API needed)
     const handleStartDemo = useCallback(async () => {
+        // Unlock audio for iOS (must be called on user interaction)
+        unlockAudio();
+
+        // Request microphone permission explicitly for mobile
+        try {
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+            console.log('Microphone permission granted');
+        } catch (err) {
+            console.error('Microphone permission denied:', err);
+            setError('マイクへのアクセスが拒否されました。ブラウザの設定でマイクを許可してください。');
+            return;
+        }
+
         setIsDemoMode(true);
         const topic = 'travel and memorable trips';
         startConversation(topic);
@@ -266,7 +297,8 @@ function App() {
             .catch(console.error)
             .finally(() => startListening());
         setProcessing(false);
-    }, [startConversation, startRecording, startListening, addMessage, setProcessing]);
+    }, [startConversation, startRecording, startListening, stopListening, addMessage, setProcessing, setError]);
+
 
     // Continue conversation
     const handleContinue = useCallback(() => {
@@ -367,6 +399,8 @@ function App() {
                     isProcessing={state.isProcessing}
                     currentTopic={state.currentTopic}
                     interimTranscript={interimTranscript}
+                    onTurnTaking={handleTurnTaking}
+                    hasAccumulatedText={hasAccumulatedText}
                 />
             )}
 
@@ -379,6 +413,8 @@ function App() {
                         isProcessing={false}
                         currentTopic={state.currentTopic}
                         interimTranscript=""
+                        onTurnTaking={() => { }}
+                        hasAccumulatedText={false}
                     />
                     <TimeCheckModal onContinue={handleContinue} onFinish={handleFinish} />
                 </>

@@ -355,21 +355,80 @@ Analyze the user's English and provide detailed feedback in the JSON format spec
     }
 }
 
+// Track if audio has been unlocked (needed for iOS)
+let audioUnlocked = false;
+
+// Unlock audio for iOS - call this on first user interaction
+export function unlockAudio(): void {
+    if (audioUnlocked) return;
+
+    if (window.speechSynthesis) {
+        // Create a silent utterance to unlock audio on iOS
+        const utterance = new SpeechSynthesisUtterance('');
+        utterance.volume = 0;
+        window.speechSynthesis.speak(utterance);
+        audioUnlocked = true;
+        console.log('Audio unlocked for iOS');
+    }
+}
+
 export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         if (!window.speechSynthesis) {
-            reject(new Error('Speech synthesis not supported'));
+            console.error('Speech synthesis not supported');
+            resolve(); // Don't block if not supported
             return;
         }
+
+        // Cancel any ongoing speech
+        window.speechSynthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = lang;
         utterance.rate = 0.9;
         utterance.pitch = 1;
+        utterance.volume = 1;
 
-        utterance.onend = () => resolve();
-        utterance.onerror = (e) => reject(e);
+        // iOS workaround: wait for voices to load
+        const speak = () => {
+            // Try to get an English voice
+            const voices = window.speechSynthesis.getVoices();
+            const englishVoice = voices.find(v => v.lang.startsWith('en'));
+            if (englishVoice) {
+                utterance.voice = englishVoice;
+            }
 
-        window.speechSynthesis.speak(utterance);
+            utterance.onend = () => {
+                console.log('Speech ended');
+                resolve();
+            };
+
+            utterance.onerror = (e) => {
+                console.error('Speech error:', e);
+                resolve(); // Don't block on error
+            };
+
+            window.speechSynthesis.speak(utterance);
+
+            // iOS fix: Speech synthesis can get stuck, so we add a timeout
+            setTimeout(() => {
+                if (window.speechSynthesis.speaking) {
+                    console.log('Speech still in progress...');
+                }
+            }, 10000);
+        };
+
+        // Check if voices are loaded
+        if (window.speechSynthesis.getVoices().length > 0) {
+            speak();
+        } else {
+            // Wait for voices to load (needed on some mobile browsers)
+            window.speechSynthesis.onvoiceschanged = () => {
+                speak();
+            };
+            // Fallback: try speaking anyway after a short delay
+            setTimeout(speak, 100);
+        }
     });
 }
+
