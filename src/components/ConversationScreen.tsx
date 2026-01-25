@@ -12,6 +12,7 @@ interface ConversationScreenProps {
     interimTranscript: string;
     onTurnTaking: () => void;
     hasAccumulatedText: boolean;
+    accumulatedText: string;
 }
 
 // Component for AI message bubble with show/hide text
@@ -66,6 +67,7 @@ export function ConversationScreen({
     interimTranscript,
     onTurnTaking,
     hasAccumulatedText,
+    accumulatedText,
 }: ConversationScreenProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -126,6 +128,21 @@ export function ConversationScreen({
                         </div>
                     )}
 
+                    {/* Accumulated text (all recorded speech so far) */}
+                    {accumulatedText && !interimTranscript && (
+                        <div className="message-bubble-user border-2 border-green-500/50">
+                            <div className="flex items-start gap-3">
+                                <div className="flex-1">
+                                    <p className="text-white/80">{accumulatedText}</p>
+                                    <p className="text-green-400 text-xs mt-1">✅ 記録済み - ボタンを押してAIに送信</p>
+                                </div>
+                                <div className="w-8 h-8 rounded-full bg-green-500/30 flex items-center justify-center flex-shrink-0">
+                                    <span className="text-sm">👤</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <div ref={messagesEndRef} />
                 </div>
 
@@ -149,8 +166,8 @@ export function ConversationScreen({
                         onClick={onTurnTaking}
                         disabled={isProcessing || !hasAccumulatedText}
                         className={`px-8 py-4 rounded-full font-bold text-lg transition-all transform ${isProcessing || !hasAccumulatedText
-                                ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                                : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:scale-105 hover:shadow-lg hover:shadow-green-500/30 active:scale-95'
+                            ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:scale-105 hover:shadow-lg hover:shadow-green-500/30 active:scale-95'
                             }`}
                     >
                         {isProcessing ? (

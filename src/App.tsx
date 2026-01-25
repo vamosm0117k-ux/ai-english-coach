@@ -43,6 +43,7 @@ function App() {
 
     const [interimTranscript, setInterimTranscript] = useState('');
     const [hasAccumulatedText, setHasAccumulatedText] = useState(false);
+    const [accumulatedText, setAccumulatedText] = useState(''); // Display accumulated text in UI
     const pendingTranscriptRef = useRef('');
     const debounceTimeoutRef = useRef<number | null>(null);
     const accumulatedTranscriptRef = useRef('');
@@ -124,6 +125,8 @@ function App() {
 
     // Speech recognition callback - just accumulate, don't auto-send
     const handleSpeechResult = useCallback((result: SpeechRecognitionResult) => {
+        console.log('Speech result:', result.transcript, 'isFinal:', result.isFinal);
+
         if (result.isFinal) {
             // Clear interim
             setInterimTranscript('');
@@ -132,8 +135,13 @@ function App() {
             if (result.transcript.trim()) {
                 // Append to accumulation (no auto-send, wait for turn taking button)
                 const text = result.transcript.trim();
-                accumulatedTranscriptRef.current += (accumulatedTranscriptRef.current ? ' ' : '') + text;
+                const newAccumulated = accumulatedTranscriptRef.current
+                    ? accumulatedTranscriptRef.current + ' ' + text
+                    : text;
+                accumulatedTranscriptRef.current = newAccumulated;
+                setAccumulatedText(newAccumulated); // Update state for UI
                 setHasAccumulatedText(true);
+                console.log('Accumulated text:', newAccumulated);
             }
         } else {
             // Update interim transcript
@@ -151,7 +159,10 @@ function App() {
         }
         // Send accumulated message
         sendAccumulatedMessage();
+        // Reset accumulated text state
         setHasAccumulatedText(false);
+        setAccumulatedText('');
+        accumulatedTranscriptRef.current = '';
     }, [sendAccumulatedMessage]);
 
     const handleSpeechError = useCallback((error: string) => {
@@ -401,6 +412,7 @@ function App() {
                     interimTranscript={interimTranscript}
                     onTurnTaking={handleTurnTaking}
                     hasAccumulatedText={hasAccumulatedText}
+                    accumulatedText={accumulatedText}
                 />
             )}
 
@@ -415,6 +427,7 @@ function App() {
                         interimTranscript=""
                         onTurnTaking={() => { }}
                         hasAccumulatedText={false}
+                        accumulatedText=""
                     />
                     <TimeCheckModal onContinue={handleContinue} onFinish={handleFinish} />
                 </>

@@ -75,31 +75,58 @@ export function useSpeechRecognition(
         };
 
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-            console.error('Speech recognition error:', event.error);
-            if (event.error !== 'aborted' && event.error !== 'no-speech') {
+            console.error('Speech recognition error:', event.error, event.message);
+            // Most errors should allow restart, only stop for fatal errors
+            if (event.error === 'not-allowed') {
                 if (onErrorRef.current) {
                     onErrorRef.current(event.error);
                 }
-            }
-            // Don't set isListening to false for no-speech, let it continue
-            if (event.error !== 'no-speech') {
                 setIsListening(false);
+                shouldRestartRef.current = false;
+            } else if (event.error === 'network') {
+                console.log('Network error - will retry');
+                // Allow restart
+            } else if (event.error === 'no-speech') {
+                console.log('No speech detected - continuing to listen');
+                // Don't stop, just continue
+            } else if (event.error === 'aborted') {
+                console.log('Recognition aborted');
+                // Check if we should restart
+            } else {
+                console.log('Other error:', event.error, '- will retry');
             }
         };
 
         recognition.onend = () => {
-            console.log('Speech recognition ended, shouldRestart:', shouldRestartRef.current);
+            console.log('Speech recognition ended, shouldRestart:', shouldRestartRef.current, 'isStopping:', isStoppingRef.current);
             // Auto-restart if should restart
             if (shouldRestartRef.current && !isStoppingRef.current) {
                 console.log('Restarting speech recognition...');
+                // Longer delay for Android
                 setTimeout(() => {
+                    if (!shouldRestartRef.current || isStoppingRef.current) {
+                        console.log('Restart cancelled');
+                        setIsListening(false);
+                        return;
+                    }
                     try {
                         recognition.start();
+                        console.log('Recognition restarted successfully');
                     } catch (e) {
                         console.error('Failed to restart recognition:', e);
-                        setIsListening(false);
+                        // Try again after another delay
+                        setTimeout(() => {
+                            if (shouldRestartRef.current && !isStoppingRef.current) {
+                                try {
+                                    recognition.start();
+                                } catch (e2) {
+                                    console.error('Second restart attempt failed:', e2);
+                                    setIsListening(false);
+                                }
+                            }
+                        }, 500);
                     }
-                }, 100);
+                }, 200);
             } else {
                 setIsListening(false);
             }
