@@ -44,6 +44,8 @@ function App() {
     const pendingTranscriptRef = useRef('');
     const debounceTimeoutRef = useRef<number | null>(null);
     const accumulatedTranscriptRef = useRef('');
+    const stopListeningRef = useRef<() => void>(() => { });
+    const startListeningRef = useRef<() => void>(() => { });
 
     // Handle AI response
     const handleAIResponse = useCallback(async (messages: Message[]) => {
@@ -62,8 +64,14 @@ function App() {
                 timestamp: Date.now(),
             };
             addMessage(aiMessage);
-            // Speak the AI response
-            speakText(response).catch(console.error);
+            // Stop listening while AI speaks, then restart
+            stopListeningRef.current();
+            try {
+                await speakText(response);
+            } catch (e) {
+                console.error('Speech error:', e);
+            }
+            startListeningRef.current();
         } catch (error) {
             console.error('AI response error full details:', error);
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -98,9 +106,13 @@ function App() {
                     content: demoResponse,
                     timestamp: Date.now(),
                 };
+                // Stop listening while AI speaks
+                stopListeningRef.current();
                 addMessage(aiMessage);
-                // Speak the response
-                speakText(demoResponse).catch(console.error);
+                // Speak the response, then restart listening
+                speakText(demoResponse)
+                    .catch(console.error)
+                    .finally(() => startListeningRef.current());
                 setProcessing(false);
             }, 1500);
         } else {
@@ -126,8 +138,8 @@ function App() {
                 const text = result.transcript.trim();
                 accumulatedTranscriptRef.current += (accumulatedTranscriptRef.current ? ' ' : '') + text;
 
-                // Set timeout to send (Debounce 1.2s)
-                debounceTimeoutRef.current = window.setTimeout(sendAccumulatedMessage, 1200);
+                // Set timeout to send (Debounce 7s - wait for user to finish speaking)
+                debounceTimeoutRef.current = window.setTimeout(sendAccumulatedMessage, 7000);
             }
         } else {
             // Update interim transcript
@@ -168,6 +180,12 @@ function App() {
         setListening(isListening);
     }, [isListening, setListening]);
 
+    // Keep refs updated with latest functions
+    useEffect(() => {
+        stopListeningRef.current = stopListening;
+        startListeningRef.current = startListening;
+    }, [stopListening, startListening]);
+
 
 
     // Start conversation
@@ -198,8 +216,14 @@ function App() {
                 timestamp: Date.now(),
             };
             addMessage(aiMessage);
-            // Speak the greeting
-            speakText(response).catch(console.error);
+            // Stop listening while AI speaks greeting, then restart
+            stopListening();
+            try {
+                await speakText(response);
+            } catch (e) {
+                console.error('Speech error:', e);
+            }
+            startListening();
         } catch (error: unknown) {
             console.error('Initial greeting error:', error);
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -235,8 +259,12 @@ function App() {
             timestamp: Date.now(),
         };
         addMessage(aiMessage);
-        // Speak the greeting
-        speakText(demoGreeting).catch(console.error);
+        // Stop listening while AI speaks greeting
+        stopListening();
+        // Speak the greeting, then restart listening
+        speakText(demoGreeting)
+            .catch(console.error)
+            .finally(() => startListening());
         setProcessing(false);
     }, [startConversation, startRecording, startListening, addMessage, setProcessing]);
 
