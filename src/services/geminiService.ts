@@ -147,22 +147,17 @@ Guidelines:
 
 Your role is to be a conversation partner, NOT a teacher during this phase.`;
 
-export const MODELS = [
-    { value: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash Exp (最新・推奨)' },
-    { value: 'gemini-1.5-flash-latest', label: 'Gemini 1.5 Flash (安定・高速)' },
-    { value: 'gemini-1.5-pro-latest', label: 'Gemini 1.5 Pro (安定・高精度)' },
-    { value: 'gemini-1.0-pro', label: 'Gemini 1.0 Pro (軽量・旧安定版)' },
-];
+// Default model for conversation
+const DEFAULT_MODEL = 'gemini-2.0-flash-exp';
 
 export async function getConversationResponse(
     messages: Message[],
     topic: string,
-    modelName: string = 'gemini-2.0-flash',
     retries = 3
 ): Promise<string> {
     if (!genAI) throw new Error('Gemini API not initialized');
 
-    const model = genAI.getGenerativeModel({ model: modelName });
+    const model = genAI.getGenerativeModel({ model: DEFAULT_MODEL });
 
     let conversationHistory = messages.map(m => ({
         role: m.role === 'user' ? 'user' : 'model',

@@ -1,13 +1,10 @@
 import { useState } from 'react';
-import { MODELS } from '../services/geminiService';
 
 interface SetupScreenProps {
     duration: number;
     apiKey: string;
-    selectedModel: string;
     onDurationChange: (minutes: number) => void;
     onApiKeyChange: (key: string) => void;
-    onModelChange: (model: string) => void;
     onStart: () => void;
     onStartDemo: () => void;
 }
@@ -23,10 +20,8 @@ const TIME_OPTIONS = [
 export function SetupScreen({
     duration,
     apiKey,
-    selectedModel,
     onDurationChange,
     onApiKeyChange,
-    onModelChange,
     onStart,
     onStartDemo,
 }: SetupScreenProps) {
@@ -101,35 +96,6 @@ export function SetupScreen({
                     )}
                 </div>
 
-                {/* Model Selection */}
-                <div className="glass-card p-6 space-y-4">
-                    <h2 className="text-white font-semibold flex items-center gap-2">
-                        <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        AIモデルを選択
-                    </h2>
-                    <div className="grid grid-cols-1 gap-2">
-                        {MODELS.map((model) => (
-                            <button
-                                key={model.value}
-                                onClick={() => onModelChange(model.value)}
-                                className={`w-full text-left px-4 py-3 rounded-xl border transition-all duration-200 flex items-center justify-between
-                                    ${selectedModel === model.value
-                                        ? 'bg-accent/10 border-accent text-white'
-                                        : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
-                                    }`}
-                            >
-                                <span>{model.label}</span>
-                                {selectedModel === model.value && (
-                                    <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                    </svg>
-                                )}
-                            </button>
-                        ))}
-                    </div>
-                </div>
 
                 {/* Duration Selection */}
                 <div className="glass-card p-6 space-y-6">

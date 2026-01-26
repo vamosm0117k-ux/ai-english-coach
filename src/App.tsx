@@ -16,13 +16,11 @@ import {
     getDemoFeedback,
     speakText,
     unlockAudio,
-    MODELS,
 } from './services/geminiService';
 import type { Message, SpeechRecognitionResult } from './types';
 
 function App() {
     const [isDemoMode, setIsDemoMode] = useState(false);
-    const [selectedModel, setSelectedModel] = useState(MODELS[0].value);
 
     const {
         state,
@@ -54,12 +52,7 @@ function App() {
     const handleAIResponse = useCallback(async (messages: Message[]) => {
         setProcessing(true);
         try {
-            // Validate model (fallback to default if selected is invalid)
-            const modelToUse = MODELS.some(m => m.value === selectedModel)
-                ? selectedModel
-                : MODELS[0].value;
-
-            const response = await getConversationResponse(messages, state.currentTopic, modelToUse);
+            const response = await getConversationResponse(messages, state.currentTopic);
             const aiMessage: Message = {
                 id: `ai-${Date.now()}`,
                 role: 'assistant',
@@ -81,7 +74,7 @@ function App() {
             setError(`AIからの応答を取得できませんでした: ${errorMessage.slice(0, 100)}...`);
         }
         setProcessing(false);
-    }, [state.currentTopic, selectedModel, addMessage, setProcessing, setError]);
+    }, [state.currentTopic, addMessage, setProcessing, setError]);
 
     const sendAccumulatedMessage = useCallback(() => {
         const text = accumulatedTranscriptRef.current.trim();
@@ -226,18 +219,13 @@ function App() {
         const topic = getRandomTopic();
         startConversation(topic);
 
-        // Validate model (fallback to default if selected is invalid)
-        const modelToUse = MODELS.some(m => m.value === selectedModel)
-            ? selectedModel
-            : MODELS[0].value;
-
         // Start recording and listening
         await startRecording();
         startListening();
 
         // Get initial AI greeting
         try {
-            const response = await getConversationResponse([], topic, modelToUse);
+            const response = await getConversationResponse([], topic);
             const aiMessage: Message = {
                 id: `ai-${Date.now()}`,
                 role: 'assistant',
@@ -259,13 +247,13 @@ function App() {
             if (errorMessage.includes('API key not valid')) {
                 setError('API Keyが無効です。正しいキーを入力してください。');
             } else if (errorMessage.includes('quota') || errorMessage.includes('429')) {
-                setError('API利用上限（429 Error）です。\n\n【重要】Gemini Advanced会員でも、API Keyのプロジェクトに「請求先アカウント（クレカ）」紐付けがないと無料枠扱いになります。\nGoogle AI Studio/Cloud Consoleで請求設定をご確認ください。\n\nまたは、モデルを「Gemini 1.5 Pro」に変更して再試行してください。');
+                setError('API利用上限（429 Error）です。\n\n【重要】Gemini Advanced会員でも、API Keyのプロジェクトに「請求先アカウント（クレカ）」紐付けがないと無料枠扱いになります。\nGoogle AI Studio/Cloud Consoleで請求設定をご確認ください。');
             } else {
                 setError(`接続エラー: ${errorMessage}`);
             }
         }
         setProcessing(false);
-    }, [state.apiKey, selectedModel, startConversation, startRecording, startListening, stopListening, addMessage, setProcessing, setError]);
+    }, [state.apiKey, startConversation, startRecording, startListening, stopListening, addMessage, setProcessing, setError]);
 
     // Start demo mode (no API needed)
     const handleStartDemo = useCallback(async () => {
@@ -393,10 +381,8 @@ function App() {
                 <SetupScreen
                     duration={state.duration}
                     apiKey={state.apiKey}
-                    selectedModel={selectedModel}
                     onDurationChange={setDuration}
                     onApiKeyChange={setApiKey}
-                    onModelChange={setSelectedModel}
                     onStart={handleStart}
                     onStartDemo={handleStartDemo}
                 />
@@ -435,7 +421,7 @@ function App() {
 
             {state.phase === 'feedback' && (
                 state.feedback ? (
-                    <FeedbackScreen feedback={state.feedback} onNewSession={reset} />
+                    <FeedbackScreen feedback={state.feedback} messages={state.messages} onNewSession={reset} />
                 ) : (
                     <div className="min-h-screen gradient-bg flex items-center justify-center">
                         <div className="text-center space-y-4">

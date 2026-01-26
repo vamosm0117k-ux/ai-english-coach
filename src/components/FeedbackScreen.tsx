@@ -1,12 +1,13 @@
 import { PronunciationPractice } from './PronunciationPractice';
-import type { Feedback } from '../types';
+import type { Feedback, Message } from '../types';
 
 interface FeedbackScreenProps {
     feedback: Feedback;
+    messages: Message[];
     onNewSession: () => void;
 }
 
-export function FeedbackScreen({ feedback, onNewSession }: FeedbackScreenProps) {
+export function FeedbackScreen({ feedback, messages, onNewSession }: FeedbackScreenProps) {
     return (
         <div className="min-h-screen gradient-bg py-12 px-6">
             <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
@@ -33,6 +34,36 @@ export function FeedbackScreen({ feedback, onNewSession }: FeedbackScreenProps) 
                     <p className="text-white/60">
                         会話の分析結果をご確認ください
                     </p>
+                </div>
+
+                {/* Conversation History */}
+                <div className="feedback-section">
+                    <div className="feedback-section-title text-blue-400">
+                        <span className="text-2xl">🗣️</span>
+                        <span>会話履歴 (Conversation History)</span>
+                    </div>
+                    <div className="space-y-3 mt-4 max-h-96 overflow-y-auto pr-2">
+                        {messages.map((message) => (
+                            <div
+                                key={message.id}
+                                className={`p-4 rounded-xl ${message.role === 'user'
+                                        ? 'bg-blue-500/20 border border-blue-500/30 ml-8'
+                                        : 'bg-white/10 border border-white/20 mr-8'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-sm font-medium">
+                                        {message.role === 'user' ? (
+                                            <span className="text-blue-400">👤 あなた</span>
+                                        ) : (
+                                            <span className="text-green-400">🤖 AI</span>
+                                        )}
+                                    </span>
+                                </div>
+                                <p className="text-white/90 leading-relaxed">{message.content}</p>
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Overall Comment */}
