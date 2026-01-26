@@ -378,19 +378,33 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
         // Cancel any ongoing speech
         window.speechSynthesis.cancel();
 
+        // Edge workaround: resume if paused (Edge can get stuck in paused state)
+        if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+        }
+
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = lang;
         utterance.rate = 0.9;
         utterance.pitch = 1;
         utterance.volume = 1;
 
-        // iOS workaround: wait for voices to load
+        // Function to actually speak
         const speak = () => {
             // Try to get an English voice
             const voices = window.speechSynthesis.getVoices();
+            console.log('Available voices:', voices.length);
+
+            // Prefer Microsoft Edge voices, then any English voice
+            const edgeVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Microsoft'));
             const englishVoice = voices.find(v => v.lang.startsWith('en'));
-            if (englishVoice) {
+
+            if (edgeVoice) {
+                utterance.voice = edgeVoice;
+                console.log('Using Edge voice:', edgeVoice.name);
+            } else if (englishVoice) {
                 utterance.voice = englishVoice;
+                console.log('Using English voice:', englishVoice.name);
             }
 
             utterance.onend = () => {
@@ -403,27 +417,55 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
                 resolve(); // Don't block on error
             };
 
+            // Edge workaround: ensure not paused before speaking
+            window.speechSynthesis.resume();
             window.speechSynthesis.speak(utterance);
 
-            // iOS fix: Speech synthesis can get stuck, so we add a timeout
-            setTimeout(() => {
-                if (window.speechSynthesis.speaking) {
-                    console.log('Speech still in progress...');
+            // Edge/Chrome fix: periodically resume to prevent getting stuck
+            const resumeInterval = setInterval(() => {
+                if (!window.speechSynthesis.speaking) {
+                    clearInterval(resumeInterval);
+                    return;
                 }
-            }, 10000);
+                if (window.speechSynthesis.paused) {
+                    console.log('Resuming paused speech...');
+                    window.speechSynthesis.resume();
+                }
+            }, 1000);
+
+            // Safety timeout: resolve after 30 seconds max
+            setTimeout(() => {
+                clearInterval(resumeInterval);
+                if (window.speechSynthesis.speaking) {
+                    console.log('Speech timeout, canceling...');
+                    window.speechSynthesis.cancel();
+                    resolve();
+                }
+            }, 30000);
         };
 
-        // Check if voices are loaded
-        if (window.speechSynthesis.getVoices().length > 0) {
-            speak();
-        } else {
-            // Wait for voices to load (needed on some mobile browsers)
-            window.speechSynthesis.onvoiceschanged = () => {
+        // Edge workaround: delay after cancel to ensure clean state
+        setTimeout(() => {
+            // Check if voices are loaded
+            if (window.speechSynthesis.getVoices().length > 0) {
                 speak();
-            };
-            // Fallback: try speaking anyway after a short delay
-            setTimeout(speak, 100);
-        }
+            } else {
+                // Wait for voices to load
+                const voicesChanged = () => {
+                    window.speechSynthesis.removeEventListener('voiceschanged', voicesChanged);
+                    speak();
+                };
+                window.speechSynthesis.addEventListener('voiceschanged', voicesChanged);
+
+                // Fallback: try speaking anyway after a short delay (Edge may not fire voiceschanged)
+                setTimeout(() => {
+                    if (window.speechSynthesis.getVoices().length === 0) {
+                        console.log('No voices loaded, attempting speak anyway...');
+                    }
+                    speak();
+                }, 200);
+            }
+        }, 50);
     });
 }
 
