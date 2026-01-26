@@ -369,103 +369,127 @@ export function unlockAudio(): void {
 
 export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
     return new Promise((resolve) => {
-        if (!window.speechSynthesis) {
+        const synth = window.speechSynthesis;
+        if (!synth) {
             console.error('Speech synthesis not supported');
-            resolve(); // Don't block if not supported
+            resolve();
             return;
         }
 
-        // Cancel any ongoing speech
-        window.speechSynthesis.cancel();
+        // 1. Aggressive reset of synthesis state
+        synth.cancel();
 
-        // Edge workaround: resume if paused (Edge can get stuck in paused state)
-        if (window.speechSynthesis.paused) {
-            window.speechSynthesis.resume();
+        // Edge fix: Resume just in case it was stuck in paused state
+        if (synth.paused) {
+            console.log('Resume paused synthesis state');
+            synth.resume();
         }
 
+        // 2. Prepare utterance
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = lang;
         utterance.rate = 0.9;
         utterance.pitch = 1;
         utterance.volume = 1;
 
-        // Function to actually speak
         const speak = () => {
-            // Try to get an English voice
-            const voices = window.speechSynthesis.getVoices();
-            console.log('Available voices:', voices.length);
+            const voices = synth.getVoices();
+            console.log(`Loaded ${voices.length} voices`);
 
-            // Prefer Microsoft Edge voices, then any English voice
-            const edgeVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Microsoft'));
-            const englishVoice = voices.find(v => v.lang.startsWith('en'));
+            // 3. Robust Voice Selection for Edge
+            // Priority:
+            // 1. Microsoft Edge Online/Natural voices (Best quality for Edge)
+            // 2. Microsoft voices (Standard Edge voices)
+            // 3. Google voices (Chrome)
+            // 4. Any English voice
+            let selectedVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Microsoft') && v.name.includes('Natural'))
+                || voices.find(v => v.lang.startsWith('en') && v.name.includes('Microsoft'))
+                || voices.find(v => v.lang.startsWith('en') && v.name.includes('Google'))
+                || voices.find(v => v.lang.startsWith('en'));
 
-            if (edgeVoice) {
-                utterance.voice = edgeVoice;
-                console.log('Using Edge voice:', edgeVoice.name);
-            } else if (englishVoice) {
-                utterance.voice = englishVoice;
-                console.log('Using English voice:', englishVoice.name);
+            if (selectedVoice) {
+                utterance.voice = selectedVoice;
+                console.log('Using voice:', selectedVoice.name);
+            } else {
+                console.warn('No English voice found, using default');
             }
 
+            utterance.onstart = () => {
+                console.log('Speech started');
+            };
+
             utterance.onend = () => {
-                console.log('Speech ended');
+                console.log('Speech ended normally');
                 resolve();
             };
 
             utterance.onerror = (e) => {
-                console.error('Speech error:', e);
-                resolve(); // Don't block on error
+                console.error('Speech error event:', e);
+                // Don't reject, just resolve to keep app flow moving
+                resolve();
             };
 
-            // Edge workaround: ensure not paused before speaking
-            window.speechSynthesis.resume();
-            window.speechSynthesis.speak(utterance);
-
-            // Edge/Chrome fix: periodically resume to prevent getting stuck
-            const resumeInterval = setInterval(() => {
-                if (!window.speechSynthesis.speaking) {
-                    clearInterval(resumeInterval);
-                    return;
-                }
-                if (window.speechSynthesis.paused) {
-                    console.log('Resuming paused speech...');
-                    window.speechSynthesis.resume();
-                }
-            }, 1000);
-
-            // Safety timeout: resolve after 30 seconds max
+            // 4. Wake-up Hack for Edge
+            // Ensure resume is called right before speak to wake up the engine.
             setTimeout(() => {
-                clearInterval(resumeInterval);
-                if (window.speechSynthesis.speaking) {
-                    console.log('Speech timeout, canceling...');
-                    window.speechSynthesis.cancel();
+                synth.resume();
+                try {
+                    synth.speak(utterance);
+
+                    // 5. Watchdog for stuck speech
+                    const watchdog = setInterval(() => {
+                        if (!synth.speaking) {
+                            clearInterval(watchdog);
+                            return;
+                        }
+                        if (synth.paused) {
+                            console.log('Watchdog: Resuming paused speech');
+                            synth.resume();
+                        }
+                    }, 500);
+
+                    // Safety timeout (30s)
+                    setTimeout(() => {
+                        clearInterval(watchdog);
+                        if (synth.speaking) {
+                            console.warn('Speech timeout - forcing cancel');
+                            synth.cancel();
+                            resolve();
+                        }
+                    }, 30000);
+
+                } catch (err) {
+                    console.error('synth.speak threw error:', err);
                     resolve();
                 }
-            }, 30000);
+            }, 50); // Small delay to allow cancel() to fully take effect
         };
 
-        // Edge workaround: delay after cancel to ensure clean state
-        setTimeout(() => {
-            // Check if voices are loaded
-            if (window.speechSynthesis.getVoices().length > 0) {
+        // Voice loading logic
+        if (synth.getVoices().length > 0) {
+            speak();
+        } else {
+            console.log('Waiting for voices...');
+            const onVoicesChanged = () => {
+                synth.removeEventListener('voiceschanged', onVoicesChanged);
                 speak();
-            } else {
-                // Wait for voices to load
-                const voicesChanged = () => {
-                    window.speechSynthesis.removeEventListener('voiceschanged', voicesChanged);
-                    speak();
-                };
-                window.speechSynthesis.addEventListener('voiceschanged', voicesChanged);
+            };
+            synth.addEventListener('voiceschanged', onVoicesChanged);
 
-                // Fallback: try speaking anyway after a short delay (Edge may not fire voiceschanged)
-                setTimeout(() => {
-                    if (window.speechSynthesis.getVoices().length === 0) {
-                        console.log('No voices loaded, attempting speak anyway...');
-                    }
+            // Edge fallback: voiceschanged might not fire or voices might fail to load
+            setTimeout(() => {
+                // Remove listener to prevent double speak
+                synth.removeEventListener('voiceschanged', onVoicesChanged);
+
+                const currentVoices = synth.getVoices();
+                if (currentVoices.length > 0) {
+                    console.log('Voices loaded after timeout');
                     speak();
-                }, 200);
-            }
-        }, 50);
+                } else {
+                    console.warn('No voices loaded after timeout, attempting speak with default voice');
+                    speak();
+                }
+            }, 1000);
+        }
     });
 }
-
