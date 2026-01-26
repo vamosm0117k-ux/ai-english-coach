@@ -393,26 +393,50 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
         utterance.pitch = 1;
         utterance.volume = 1;
 
-        const speak = () => {
+        // Internal function to handle speaking with retry capability
+        const speakInternal = (allowOnlineVoices: boolean) => {
             const voices = synth.getVoices();
-            logger.info(`Loaded ${voices.length} voices`);
+            logger.info(`Loaded ${voices.length} voices (Online allowed: ${allowOnlineVoices})`);
 
-            // 3. Robust Voice Selection for Edge
-            // Priority:
-            // 1. Microsoft Edge Online/Natural voices (Best quality for Edge)
-            // 2. Microsoft voices (Standard Edge voices)
-            // 3. Google voices (Chrome)
-            // 4. Any English voice
-            let selectedVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Microsoft') && v.name.includes('Natural'))
-                || voices.find(v => v.lang.startsWith('en') && v.name.includes('Microsoft'))
-                || voices.find(v => v.lang.startsWith('en') && v.name.includes('Google'))
-                || voices.find(v => v.lang.startsWith('en'));
+            // 3. Robust Voice Selection Strategy
+            let selectedVoice: SpeechSynthesisVoice | undefined;
+
+            if (allowOnlineVoices) {
+                // Priority 1: US English Natural (Online) - Best Quality
+                selectedVoice = voices.find(v => v.lang === 'en-US' && v.name.includes('Microsoft') && v.name.includes('Natural'));
+
+                // Priority 2: Any English Natural (Online)
+                if (!selectedVoice) {
+                    selectedVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Microsoft') && v.name.includes('Natural'));
+                }
+            }
+
+            // Fallback / Offline Priorities
+            if (!selectedVoice) {
+                // Priority 3: US English Microsoft (Offline/Standard)
+                selectedVoice = voices.find(v => v.lang === 'en-US' && v.name.includes('Microsoft'));
+            }
+
+            if (!selectedVoice) {
+                // Priority 4: Google US English (Chrome/Android)
+                selectedVoice = voices.find(v => v.lang === 'en-US' && v.name.includes('Google'));
+            }
+
+            if (!selectedVoice) {
+                // Priority 5: Any US English
+                selectedVoice = voices.find(v => v.lang === 'en-US');
+            }
+
+            if (!selectedVoice) {
+                // Priority 6: Any English
+                selectedVoice = voices.find(v => v.lang.startsWith('en'));
+            }
 
             if (selectedVoice) {
                 utterance.voice = selectedVoice;
-                logger.info('Using voice:', selectedVoice.name);
+                logger.info(`Using voice: "${selectedVoice.name}" (Lang: ${selectedVoice.lang})`);
             } else {
-                logger.warn('No English voice found, using default');
+                logger.warn('No English voice found, using system default');
             }
 
             utterance.onstart = () => {
@@ -426,12 +450,22 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
 
             utterance.onerror = (e) => {
                 logger.error('Speech error event:', e);
-                // Don't reject, just resolve to keep app flow moving
-                resolve();
+
+                // Critical: If error occurs and we were using an online voice, THIS is where we retry
+                if (allowOnlineVoices) {
+                    logger.warn('Error with potential online voice. Retrying with offline/local voices only...');
+                    // Cancel current (failed) speech
+                    synth.cancel();
+                    // Small delay then retry
+                    setTimeout(() => speakInternal(false), 100);
+                } else {
+                    // Already tried offline, or it was offline and failed. Give up.
+                    logger.error('Offline voice also failed (or was already offline). Resolving.');
+                    resolve();
+                }
             };
 
             // 4. Wake-up Hack for Edge
-            // Ensure resume is called right before speak to wake up the engine.
             setTimeout(() => {
                 synth.resume();
                 try {
@@ -461,19 +495,24 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
 
                 } catch (err) {
                     logger.error('synth.speak threw error:', err);
-                    resolve();
+                    if (allowOnlineVoices) {
+                        logger.warn('speak() threw error. Retrying offline...');
+                        setTimeout(() => speakInternal(false), 100);
+                    } else {
+                        resolve();
+                    }
                 }
-            }, 50); // Small delay to allow cancel() to fully take effect
+            }, 50);
         };
 
         // Voice loading logic
         if (synth.getVoices().length > 0) {
-            speak();
+            speakInternal(true); // Attempt with online voices first
         } else {
             logger.info('Waiting for voices...');
             const onVoicesChanged = () => {
                 synth.removeEventListener('voiceschanged', onVoicesChanged);
-                speak();
+                speakInternal(true);
             };
             synth.addEventListener('voiceschanged', onVoicesChanged);
 
@@ -485,12 +524,13 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
                 const currentVoices = synth.getVoices();
                 if (currentVoices.length > 0) {
                     logger.info('Voices loaded after timeout');
-                    speak();
+                    speakInternal(true);
                 } else {
                     logger.warn('No voices loaded after timeout, attempting speak with default voice');
-                    speak();
+                    speakInternal(true);
                 }
             }, 1000);
         }
     });
 }
+
