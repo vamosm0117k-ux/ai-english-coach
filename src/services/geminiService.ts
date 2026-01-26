@@ -413,8 +413,13 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
 
             // Fallback / Offline Priorities
             if (!selectedVoice) {
-                // Priority 3: US English Microsoft (Offline/Standard)
-                selectedVoice = voices.find(v => v.lang === 'en-US' && v.name.includes('Microsoft'));
+                // Priority 3: US English Microsoft (Offline/Standard) - Explicitly EXCLUDE Online/Natural
+                selectedVoice = voices.find(v =>
+                    v.lang === 'en-US' &&
+                    v.name.includes('Microsoft') &&
+                    !v.name.includes('Online') &&
+                    !v.name.includes('Natural')
+                );
             }
 
             if (!selectedVoice) {
@@ -423,13 +428,13 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
             }
 
             if (!selectedVoice) {
-                // Priority 5: Any US English
-                selectedVoice = voices.find(v => v.lang === 'en-US');
+                // Priority 5: Any US English (Exclude Online if forced offline)
+                selectedVoice = voices.find(v => v.lang === 'en-US' && (!allowOnlineVoices ? !v.name.includes('Online') : true));
             }
 
             if (!selectedVoice) {
-                // Priority 6: Any English
-                selectedVoice = voices.find(v => v.lang.startsWith('en'));
+                // Priority 6: Any English (Exclude Online if forced offline)
+                selectedVoice = voices.find(v => v.lang.startsWith('en') && (!allowOnlineVoices ? !v.name.includes('Online') : true));
             }
 
             if (selectedVoice) {
