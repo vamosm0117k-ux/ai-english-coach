@@ -457,7 +457,7 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
                     // Cancel current (failed) speech
                     synth.cancel();
                     // Small delay then retry
-                    setTimeout(() => speakInternal(false), 100);
+                    setTimeout(() => speakInternal(false), 1000); // Increased delay to allow cancel() to fully take effect
                 } else {
                     // Already tried offline, or it was offline and failed. Give up.
                     logger.error('Offline voice also failed (or was already offline). Resolving.');
@@ -497,7 +497,7 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
                     logger.error('synth.speak threw error:', err);
                     if (allowOnlineVoices) {
                         logger.warn('speak() threw error. Retrying offline...');
-                        setTimeout(() => speakInternal(false), 100);
+                        setTimeout(() => speakInternal(false), 500);
                     } else {
                         resolve();
                     }
