@@ -416,12 +416,13 @@ function App() {
                         hasAccumulatedText={false}
                         accumulatedText=""
                     />
-                    {/* Debug Console Overlay */}
-                    <DebugConsole />
                     {/* Permission Modal */}
                     <TimeCheckModal onContinue={handleContinue} onFinish={handleFinish} />
                 </>
             )}
+
+            {/* Debug Console Overlay - Visible everywhere */}
+            <DebugConsole />
 
             {state.phase === 'feedback' && (
                 state.feedback ? (
