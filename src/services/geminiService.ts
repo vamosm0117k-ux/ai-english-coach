@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Message, Feedback } from '../types';
+import { logger } from '../utils/logger';
 
 let genAI: GoogleGenerativeAI | null = null;
 
@@ -363,7 +364,7 @@ export function unlockAudio(): void {
         utterance.volume = 0;
         window.speechSynthesis.speak(utterance);
         audioUnlocked = true;
-        console.log('Audio unlocked for iOS');
+        logger.info('Audio unlocked for iOS');
     }
 }
 
@@ -371,7 +372,7 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
     return new Promise((resolve) => {
         const synth = window.speechSynthesis;
         if (!synth) {
-            console.error('Speech synthesis not supported');
+            logger.error('Speech synthesis not supported');
             resolve();
             return;
         }
@@ -381,7 +382,7 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
 
         // Edge fix: Resume just in case it was stuck in paused state
         if (synth.paused) {
-            console.log('Resume paused synthesis state');
+            logger.info('Resume paused synthesis state');
             synth.resume();
         }
 
@@ -394,7 +395,7 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
 
         const speak = () => {
             const voices = synth.getVoices();
-            console.log(`Loaded ${voices.length} voices`);
+            logger.info(`Loaded ${voices.length} voices`);
 
             // 3. Robust Voice Selection for Edge
             // Priority:
@@ -409,22 +410,22 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
 
             if (selectedVoice) {
                 utterance.voice = selectedVoice;
-                console.log('Using voice:', selectedVoice.name);
+                logger.info('Using voice:', selectedVoice.name);
             } else {
-                console.warn('No English voice found, using default');
+                logger.warn('No English voice found, using default');
             }
 
             utterance.onstart = () => {
-                console.log('Speech started');
+                logger.info('Speech started');
             };
 
             utterance.onend = () => {
-                console.log('Speech ended normally');
+                logger.info('Speech ended normally');
                 resolve();
             };
 
             utterance.onerror = (e) => {
-                console.error('Speech error event:', e);
+                logger.error('Speech error event:', e);
                 // Don't reject, just resolve to keep app flow moving
                 resolve();
             };
@@ -443,7 +444,7 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
                             return;
                         }
                         if (synth.paused) {
-                            console.log('Watchdog: Resuming paused speech');
+                            logger.warn('Watchdog: Resuming paused speech');
                             synth.resume();
                         }
                     }, 500);
@@ -452,14 +453,14 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
                     setTimeout(() => {
                         clearInterval(watchdog);
                         if (synth.speaking) {
-                            console.warn('Speech timeout - forcing cancel');
+                            logger.warn('Speech timeout - forcing cancel');
                             synth.cancel();
                             resolve();
                         }
                     }, 30000);
 
                 } catch (err) {
-                    console.error('synth.speak threw error:', err);
+                    logger.error('synth.speak threw error:', err);
                     resolve();
                 }
             }, 50); // Small delay to allow cancel() to fully take effect
@@ -469,7 +470,7 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
         if (synth.getVoices().length > 0) {
             speak();
         } else {
-            console.log('Waiting for voices...');
+            logger.info('Waiting for voices...');
             const onVoicesChanged = () => {
                 synth.removeEventListener('voiceschanged', onVoicesChanged);
                 speak();
@@ -483,10 +484,10 @@ export function speakText(text: string, lang: string = 'en-US'): Promise<void> {
 
                 const currentVoices = synth.getVoices();
                 if (currentVoices.length > 0) {
-                    console.log('Voices loaded after timeout');
+                    logger.info('Voices loaded after timeout');
                     speak();
                 } else {
-                    console.warn('No voices loaded after timeout, attempting speak with default voice');
+                    logger.warn('No voices loaded after timeout, attempting speak with default voice');
                     speak();
                 }
             }, 1000);

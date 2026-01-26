@@ -3,6 +3,7 @@ import { SetupScreen } from './components/SetupScreen';
 import { ConversationScreen } from './components/ConversationScreen';
 import { TimeCheckModal } from './components/TimeCheckModal';
 import { FeedbackScreen } from './components/FeedbackScreen';
+import { DebugConsole } from './components/DebugConsole';
 import { useAppState } from './hooks/useAppState';
 import { useTimer } from './hooks/useTimer';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
@@ -415,6 +416,9 @@ function App() {
                         hasAccumulatedText={false}
                         accumulatedText=""
                     />
+                    {/* Debug Console Overlay */}
+                    <DebugConsole />
+                    {/* Permission Modal */}
                     <TimeCheckModal onContinue={handleContinue} onFinish={handleFinish} />
                 </>
             )}

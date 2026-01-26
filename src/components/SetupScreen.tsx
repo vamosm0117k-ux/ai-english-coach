@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { speakText, unlockAudio } from '../services/geminiService';
+import { logger } from '../utils/logger';
 
 interface SetupScreenProps {
     duration: number;
@@ -26,6 +28,30 @@ export function SetupScreen({
     onStartDemo,
 }: SetupScreenProps) {
     const [showApiInput, setShowApiInput] = useState(!apiKey);
+    const [isTestingAudio, setIsTestingAudio] = useState(false);
+
+    useEffect(() => {
+        // Attempt to unlock audio on mount (though usually requires interaction)
+        unlockAudio();
+    }, []);
+
+    const handleAudioTest = async () => {
+        if (isTestingAudio) return;
+        setIsTestingAudio(true);
+        logger.info('Starting audio test...');
+
+        // Ensure unlock is called on interaction
+        unlockAudio();
+
+        try {
+            await speakText("This is an audio test. Can you hear me?");
+            logger.info('Audio test completed');
+        } catch (e) {
+            logger.error('Audio test failed', e);
+        } finally {
+            setIsTestingAudio(false);
+        }
+    };
 
     return (
         <div className="min-h-screen gradient-bg flex items-center justify-center p-6">
@@ -130,9 +156,33 @@ export function SetupScreen({
                     </p>
                 </div>
 
+                {/* Audio Test Button */}
+                <div className="flex justify-center">
+                    <button
+                        onClick={handleAudioTest}
+                        disabled={isTestingAudio}
+                        className="text-sm px-4 py-2 rounded-full border border-white/20 hover:bg-white/10 transition-colors flex items-center gap-2 text-white/70"
+                    >
+                        {isTestingAudio ? (
+                            <>
+                                <span className="animate-spin">⏳</span>
+                                テスト再生中...
+                            </>
+                        ) : (
+                            <>
+                                <span>🔊</span>
+                                音声テスト（クリックして確認）
+                            </>
+                        )}
+                    </button>
+                </div>
+
                 {/* Start Button */}
                 <button
-                    onClick={onStart}
+                    onClick={() => {
+                        unlockAudio();
+                        onStart();
+                    }}
                     disabled={!apiKey}
                     className="w-full btn-primary py-5 text-xl flex items-center justify-center gap-3"
                 >
@@ -145,7 +195,10 @@ export function SetupScreen({
 
                 {/* Demo Mode Button */}
                 <button
-                    onClick={onStartDemo}
+                    onClick={() => {
+                        unlockAudio();
+                        onStartDemo();
+                    }}
                     className="w-full btn-secondary py-4 text-lg flex items-center justify-center gap-3"
                 >
                     <span className="text-xl">🎮</span>

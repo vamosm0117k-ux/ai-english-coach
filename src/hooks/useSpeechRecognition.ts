@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { SpeechRecognitionResult } from '../types';
+import { logger } from '../utils/logger';
 
 // Extend Window interface for SpeechRecognition
 interface SpeechRecognitionEvent extends Event {
@@ -57,7 +58,7 @@ export function useSpeechRecognition(
 
         if (!SpeechRecognitionAPI) {
             setIsSupported(false);
-            console.error('Speech Recognition API not supported');
+            logger.error('Speech Recognition API not supported');
             return;
         }
 
@@ -75,7 +76,7 @@ export function useSpeechRecognition(
         };
 
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-            console.error('Speech recognition error:', event.error, event.message);
+            logger.error('Speech recognition error:', { error: event.error, message: event.message });
             // Most errors should allow restart, only stop for fatal errors
             if (event.error === 'not-allowed') {
                 if (onErrorRef.current) {
@@ -84,43 +85,43 @@ export function useSpeechRecognition(
                 setIsListening(false);
                 shouldRestartRef.current = false;
             } else if (event.error === 'network') {
-                console.log('Network error - will retry');
+                logger.warn('Network error - will retry');
                 // Allow restart
             } else if (event.error === 'no-speech') {
-                console.log('No speech detected - continuing to listen');
+                logger.info('No speech detected - continuing to listen');
                 // Don't stop, just continue
             } else if (event.error === 'aborted') {
-                console.log('Recognition aborted');
+                logger.info('Recognition aborted');
                 // Check if we should restart
             } else {
-                console.log('Other error:', event.error, '- will retry');
+                logger.warn('Other speech error:', event.error);
             }
         };
 
         recognition.onend = () => {
-            console.log('Speech recognition ended, shouldRestart:', shouldRestartRef.current, 'isStopping:', isStoppingRef.current);
+            logger.info('Speech recognition ended', { shouldRestart: shouldRestartRef.current, isStopping: isStoppingRef.current });
             // Auto-restart if should restart
             if (shouldRestartRef.current && !isStoppingRef.current) {
-                console.log('Restarting speech recognition...');
+                logger.info('Restarting speech recognition...');
                 // Longer delay for Android
                 setTimeout(() => {
                     if (!shouldRestartRef.current || isStoppingRef.current) {
-                        console.log('Restart cancelled');
+                        logger.info('Restart cancelled');
                         setIsListening(false);
                         return;
                     }
                     try {
                         recognition.start();
-                        console.log('Recognition restarted successfully');
+                        logger.info('Recognition restarted successfully');
                     } catch (e) {
-                        console.error('Failed to restart recognition:', e);
+                        logger.error('Failed to restart recognition:', e);
                         // Try again after another delay
                         setTimeout(() => {
                             if (shouldRestartRef.current && !isStoppingRef.current) {
                                 try {
                                     recognition.start();
                                 } catch (e2) {
-                                    console.error('Second restart attempt failed:', e2);
+                                    logger.error('Second restart attempt failed:', e2);
                                     setIsListening(false);
                                 }
                             }
@@ -133,12 +134,12 @@ export function useSpeechRecognition(
         };
 
         recognition.onstart = () => {
-            console.log('Speech recognition started');
+            logger.info('Speech recognition started');
             setIsListening(true);
         };
 
         recognition.onaudiostart = () => {
-            console.log('Audio capture started');
+            logger.info('Audio capture started');
         };
 
         recognitionRef.current = recognition;
@@ -152,18 +153,18 @@ export function useSpeechRecognition(
 
     const startListening = useCallback(() => {
         if (!recognitionRef.current || !isSupported) {
-            console.error('Speech recognition not available');
+            logger.error('Speech recognition not available for start');
             return;
         }
 
-        console.log('Starting speech recognition...');
+        logger.info('Starting speech recognition...');
         isStoppingRef.current = false;
         shouldRestartRef.current = true;
 
         try {
             recognitionRef.current.start();
         } catch (e) {
-            console.error('Error starting recognition:', e);
+            logger.error('Error starting recognition:', e);
             // Already started, that's ok
         }
     }, [isSupported]);
@@ -171,7 +172,7 @@ export function useSpeechRecognition(
     const stopListening = useCallback(() => {
         if (!recognitionRef.current) return;
 
-        console.log('Stopping speech recognition...');
+        logger.info('Stopping speech recognition...');
         isStoppingRef.current = true;
         shouldRestartRef.current = false;
         recognitionRef.current.stop();
