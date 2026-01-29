@@ -149,7 +149,7 @@ Guidelines:
 Your role is to be a conversation partner, NOT a teacher during this phase.`;
 
 // Default model for conversation
-const DEFAULT_MODEL = 'gemini-2.0-flash-exp';
+const DEFAULT_MODEL = 'gemini-2.0-flash';
 
 export async function getConversationResponse(
     messages: Message[],
